@@ -1,6 +1,14 @@
 "use client"
 
-import { MoreHorizontal, Eye, CheckCircle2, Link2, Trash2 } from "lucide-react"
+import { useState } from "react"
+import {
+  MoreHorizontal,
+  Eye,
+  CheckCircle2,
+  XCircle,
+  Pencil,
+  CheckCheck,
+} from "lucide-react"
 import {
   Table,
   TableBody,
@@ -10,6 +18,8 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
+import { Textarea } from "@/components/ui/textarea"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -17,29 +27,26 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { Button } from "@/components/ui/button"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { cn } from "@/lib/utils"
+import { toast } from "sonner"
+import { toasts } from "@/lib/toast-messages"
+import { useConsultation } from "@/contexts/consultation-context"
+import { AiIndicator } from "@/components/ui/ai-indicator"
+import { ConfidenceBadge } from "@/components/workflow/confidence-badge"
+import { ExigenceDetailDialog } from "./exigence-detail-dialog"
+import type { Exigence, ExigenceType, Priorite, ValidationStatus } from "@/lib/mock-data"
 
-// -------------------------------------------------------------------
-// Types
-// -------------------------------------------------------------------
-
-type ExigenceType = "Technique" | "Administrative" | "Financiere" | "Juridique"
-type Priorite = "Critique" | "Important" | "Standard"
-type Statut = "Extraite" | "Validee" | "Matchee"
-
-interface Exigence {
-  id: string
-  numero: number
-  description: string
-  type: ExigenceType
-  priorite: Priorite
-  statut: Statut
-}
-
-// -------------------------------------------------------------------
-// Configuration des couleurs
-// -------------------------------------------------------------------
+// ─── Configuration des couleurs ────────────────────────────────────────────
 
 const typeColors: Record<ExigenceType, string> = {
   Technique: "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300",
@@ -54,183 +61,294 @@ const prioriteColors: Record<Priorite, string> = {
   Standard: "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400",
 }
 
-const statutColors: Record<Statut, string> = {
-  Extraite: "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400",
-  Validee: "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300",
-  Matchee: "bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300",
+const statusBorderColors: Record<ValidationStatus, string> = {
+  pending: "border-l-blue-400",
+  accepted: "border-l-emerald-500",
+  rejected: "border-l-red-500",
+  edited: "border-l-amber-500",
 }
 
-// -------------------------------------------------------------------
-// Donnees de demonstration
-// -------------------------------------------------------------------
+const statusLabels: Record<ValidationStatus, string> = {
+  pending: "En attente",
+  accepted: "Validee",
+  rejected: "Rejetee",
+  edited: "Modifiee",
+}
 
-const mockExigences: Exigence[] = [
-  {
-    id: "ex-1",
-    numero: 1,
-    description: "Le prestataire doit fournir une certification ISO 9001 en cours de validite",
-    type: "Administrative",
-    priorite: "Critique",
-    statut: "Validee",
-  },
-  {
-    id: "ex-2",
-    numero: 2,
-    description: "La solution doit supporter une charge minimale de 10 000 utilisateurs simultanes",
-    type: "Technique",
-    priorite: "Critique",
-    statut: "Extraite",
-  },
-  {
-    id: "ex-3",
-    numero: 3,
-    description: "Le delai de livraison ne doit pas exceder 6 mois a compter de la notification",
-    type: "Juridique",
-    priorite: "Important",
-    statut: "Matchee",
-  },
-  {
-    id: "ex-4",
-    numero: 4,
-    description: "Le montant du marche est soumis a un prix forfaitaire non revisable",
-    type: "Financiere",
-    priorite: "Important",
-    statut: "Validee",
-  },
-  {
-    id: "ex-5",
-    numero: 5,
-    description: "Le systeme doit garantir un taux de disponibilite de 99,9% minimum",
-    type: "Technique",
-    priorite: "Critique",
-    statut: "Extraite",
-  },
-  {
-    id: "ex-6",
-    numero: 6,
-    description: "Les donnees doivent etre hebergees sur le territoire francais (SecNumCloud)",
-    type: "Technique",
-    priorite: "Critique",
-    statut: "Validee",
-  },
-  {
-    id: "ex-7",
-    numero: 7,
-    description: "Penalite de 1% par jour calendaire de retard, plafonnee a 10% du marche",
-    type: "Juridique",
-    priorite: "Important",
-    statut: "Matchee",
-  },
-  {
-    id: "ex-8",
-    numero: 8,
-    description: "Le candidat doit justifier de 3 references similaires sur les 5 dernieres annees",
-    type: "Administrative",
-    priorite: "Standard",
-    statut: "Extraite",
-  },
-  {
-    id: "ex-9",
-    numero: 9,
-    description: "L'interface utilisateur doit etre conforme aux normes RGAA d'accessibilite",
-    type: "Technique",
-    priorite: "Important",
-    statut: "Validee",
-  },
-  {
-    id: "ex-10",
-    numero: 10,
-    description: "Le chiffre d'affaires annuel moyen doit etre superieur a 2 fois le montant du marche",
-    type: "Financiere",
-    priorite: "Standard",
-    statut: "Extraite",
-  },
-]
+const statusColors: Record<ValidationStatus, string> = {
+  pending: "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300",
+  accepted: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300",
+  rejected: "bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300",
+  edited: "bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300",
+}
 
-// -------------------------------------------------------------------
-// Composant
-// -------------------------------------------------------------------
+// ─── Composant ─────────────────────────────────────────────────────────────
 
 export function ExigencesTable() {
+  const {
+    exigences,
+    validateExigence,
+    rejectExigence,
+    editExigence,
+    validateAllExigences,
+  } = useConsultation()
+
+  const [detailExigence, setDetailExigence] = useState<Exigence | null>(null)
+  const [detailOpen, setDetailOpen] = useState(false)
+
+  // Edition inline
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editValue, setEditValue] = useState("")
+
+  // Rejet avec AlertDialog
+  const [rejectTarget, setRejectTarget] = useState<Exigence | null>(null)
+  const [rejectReason, setRejectReason] = useState("")
+
+  const pendingCount = exigences.filter((e) => e.validationStatus === "pending").length
+  const validatedCount = exigences.filter(
+    (e) => e.validationStatus === "accepted" || e.validationStatus === "edited"
+  ).length
+
+  // ── Handlers ───────────────────────────────────────────────────────────
+
+  const handleValidate = (id: string) => {
+    validateExigence(id)
+    toast.success(toasts.exigenceValidated)
+  }
+
+  const handleReject = () => {
+    if (!rejectTarget) return
+    rejectExigence(rejectTarget.id, rejectReason)
+    toast.success(toasts.exigenceRejected)
+    setRejectTarget(null)
+    setRejectReason("")
+  }
+
+  const handleStartEdit = (exigence: Exigence) => {
+    setEditingId(exigence.id)
+    setEditValue(exigence.editedDescription ?? exigence.description)
+  }
+
+  const handleSaveEdit = (id: string) => {
+    editExigence(id, editValue)
+    toast.success(toasts.exigenceEdited)
+    setEditingId(null)
+    setEditValue("")
+  }
+
+  const handleCancelEdit = () => {
+    setEditingId(null)
+    setEditValue("")
+  }
+
+  const handleValidateAll = () => {
+    validateAllExigences()
+    toast.success(toasts.allExigencesValidated)
+  }
+
+  const handleOpenDetail = (exigence: Exigence) => {
+    setDetailExigence(exigence)
+    setDetailOpen(true)
+  }
+
   return (
-    <div className="rounded-lg border">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead className="w-12">#</TableHead>
-            <TableHead className="min-w-[300px]">Exigence</TableHead>
-            <TableHead className="w-[120px]">Type</TableHead>
-            <TableHead className="w-[110px]">Priorite</TableHead>
-            <TableHead className="w-[100px]">Statut</TableHead>
-            <TableHead className="w-[60px] text-right">Actions</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {mockExigences.map((exigence) => (
-            <TableRow key={exigence.id}>
-              <TableCell className="font-medium text-muted-foreground">
-                {exigence.numero}
-              </TableCell>
-              <TableCell className="max-w-[400px]">
-                <span className="line-clamp-2 text-sm">{exigence.description}</span>
-              </TableCell>
-              <TableCell>
-                <Badge
-                  variant="secondary"
-                  className={cn("text-xs", typeColors[exigence.type])}
+    <>
+      <div className="space-y-3">
+        {/* Header avec actions batch */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <ConfidenceBadge type="ia" />
+            <span className="text-sm text-muted-foreground">
+              {validatedCount}/{exigences.length} validees
+            </span>
+          </div>
+          {pendingCount > 0 && (
+            <Button size="sm" onClick={handleValidateAll}>
+              <CheckCheck className="mr-2 size-4" />
+              Tout valider ({pendingCount})
+            </Button>
+          )}
+        </div>
+
+        {/* Table */}
+        <div className="rounded-lg border">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="w-12">#</TableHead>
+                <TableHead className="min-w-[300px]">Exigence</TableHead>
+                <TableHead className="w-[120px]">Type</TableHead>
+                <TableHead className="w-[110px]">Priorite</TableHead>
+                <TableHead className="w-[100px]">Statut</TableHead>
+                <TableHead className="w-[60px] text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {exigences.map((exigence) => (
+                <TableRow
+                  key={exigence.id}
+                  className={cn(
+                    "border-l-4",
+                    statusBorderColors[exigence.validationStatus]
+                  )}
                 >
-                  {exigence.type}
-                </Badge>
-              </TableCell>
-              <TableCell>
-                <Badge
-                  variant="secondary"
-                  className={cn("text-xs", prioriteColors[exigence.priorite])}
-                >
-                  {exigence.priorite}
-                </Badge>
-              </TableCell>
-              <TableCell>
-                <Badge
-                  variant="secondary"
-                  className={cn("text-xs", statutColors[exigence.statut])}
-                >
-                  {exigence.statut}
-                </Badge>
-              </TableCell>
-              <TableCell className="text-right">
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="icon" className="size-8">
-                      <MoreHorizontal className="size-4" />
-                      <span className="sr-only">Actions</span>
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem>
-                      <Eye className="mr-2 size-4" />
-                      Voir le detail
-                    </DropdownMenuItem>
-                    <DropdownMenuItem>
-                      <CheckCircle2 className="mr-2 size-4" />
-                      Valider l&apos;exigence
-                    </DropdownMenuItem>
-                    <DropdownMenuItem>
-                      <Link2 className="mr-2 size-4" />
-                      Matcher une reference
-                    </DropdownMenuItem>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem variant="destructive">
-                      <Trash2 className="mr-2 size-4" />
-                      Supprimer
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-    </div>
+                  <TableCell className="font-medium text-muted-foreground">
+                    {exigence.numero}
+                  </TableCell>
+                  <TableCell className="max-w-[400px]">
+                    {editingId === exigence.id ? (
+                      <div className="space-y-2">
+                        <Textarea
+                          value={editValue}
+                          onChange={(e) => setEditValue(e.target.value)}
+                          rows={3}
+                          className="resize-none text-sm"
+                          autoFocus
+                        />
+                        <div className="flex gap-2">
+                          <Button
+                            size="sm"
+                            onClick={() => handleSaveEdit(exigence.id)}
+                          >
+                            Sauvegarder
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={handleCancelEdit}
+                          >
+                            Annuler
+                          </Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <span className="line-clamp-2 text-sm">
+                        {exigence.editedDescription ?? exigence.description}
+                      </span>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    <Badge
+                      variant="secondary"
+                      className={cn("text-xs", typeColors[exigence.type])}
+                    >
+                      {exigence.type}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>
+                    <Badge
+                      variant="secondary"
+                      className={cn("text-xs", prioriteColors[exigence.priorite])}
+                    >
+                      {exigence.priorite}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>
+                    <Badge
+                      variant="secondary"
+                      className={cn("text-xs", statusColors[exigence.validationStatus])}
+                    >
+                      {statusLabels[exigence.validationStatus]}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="icon" className="size-8">
+                          <MoreHorizontal className="size-4" />
+                          <span className="sr-only">Actions</span>
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={() => handleOpenDetail(exigence)}>
+                          <Eye className="mr-2 size-4" />
+                          Voir le detail
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => handleValidate(exigence.id)}>
+                          <CheckCircle2 className="mr-2 size-4" />
+                          Valider
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => handleStartEdit(exigence)}>
+                          <Pencil className="mr-2 size-4" />
+                          Modifier
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                          className="text-red-600 focus:text-red-600"
+                          onClick={() => setRejectTarget(exigence)}
+                        >
+                          <XCircle className="mr-2 size-4" />
+                          Rejeter
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      </div>
+
+      {/* Dialog detail exigence */}
+      <ExigenceDetailDialog
+        exigence={detailExigence}
+        open={detailOpen}
+        onOpenChange={setDetailOpen}
+        onAccept={(id) => {
+          validateExigence(id)
+          toast.success(toasts.exigenceValidated)
+        }}
+        onReject={(id, reason) => {
+          rejectExigence(id, reason)
+          toast.success(toasts.exigenceRejected)
+        }}
+        onEdit={(id, desc) => {
+          editExigence(id, desc)
+          toast.success(toasts.exigenceEdited)
+        }}
+      />
+
+      {/* AlertDialog pour rejet */}
+      <AlertDialog
+        open={!!rejectTarget}
+        onOpenChange={(open) => {
+          if (!open) {
+            setRejectTarget(null)
+            setRejectReason("")
+          }
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Rejeter l&apos;exigence ?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Vous etes sur le point de rejeter l&apos;exigence{" "}
+              <strong>{rejectTarget?.code}</strong>. Cette action peut etre
+              annulee ulterieurement.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="py-2">
+            <Textarea
+              value={rejectReason}
+              onChange={(e) => setRejectReason(e.target.value)}
+              placeholder="Motif du rejet (obligatoire)..."
+              rows={3}
+              className="resize-none"
+            />
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Annuler</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleReject}
+              disabled={!rejectReason.trim()}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              Confirmer le rejet
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   )
 }

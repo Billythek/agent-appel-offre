@@ -1,3 +1,5 @@
+"use client"
+
 import { RadarChart } from "@/components/risques/radar-chart"
 import { ScoreGlobal } from "@/components/risques/score-global"
 import { VerdictBanner } from "@/components/risques/verdict-banner"

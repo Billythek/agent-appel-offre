@@ -11,15 +11,23 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Button } from "@/components/ui/button"
-import { Progress } from "@/components/ui/progress"
 import { ScoreBadge } from "@/components/matching/score-badge"
+import { ReassignDialog } from "@/components/matching/reassign-dialog"
+import { AiIndicator } from "@/components/ui/ai-indicator"
 import { cn } from "@/lib/utils"
+import { toast } from "sonner"
+import { toasts } from "@/lib/toast-messages"
+import { useConsultation } from "@/contexts/consultation-context"
+import { simulateRecommendations } from "@/lib/simulate"
 import {
   Lightbulb,
   Package,
   FileText,
   ArrowRight,
   Sparkles,
+  X,
+  RefreshCw,
+  CheckCheck,
 } from "lucide-react"
 import {
   RadialBarChart,
@@ -27,160 +35,7 @@ import {
   PolarAngleAxis,
 } from "recharts"
 import { ChartContainer, type ChartConfig } from "@/components/ui/chart"
-
-// ─── Types ──────────────────────────────────────────────────────────────────
-
-interface Produit {
-  id: string
-  nom: string
-  reference: string
-  fournisseur: string
-  description: string
-}
-
-interface Exigence {
-  id: string
-  code: string
-  titre: string
-  description: string
-  categorie: string
-  produitMatchId: string | null
-  score: number
-  validee: boolean
-}
-
-interface Suggestion {
-  id: string
-  texte: string
-  type: "manque" | "amelioration"
-}
-
-// ─── Mock Data ──────────────────────────────────────────────────────────────
-
-const mockProduits: Produit[] = [
-  {
-    id: "prod-1",
-    nom: "Serveur Dell PowerEdge R750",
-    reference: "PE-R750-XS",
-    fournisseur: "Dell Technologies",
-    description:
-      "Serveur rack 2U haute performance, processeur Intel Xeon Scalable 3e gen, 512 Go RAM, stockage NVMe.",
-  },
-  {
-    id: "prod-2",
-    nom: "Switch Cisco Catalyst 9300",
-    reference: "C9300-48P-A",
-    fournisseur: "Cisco Systems",
-    description:
-      "Switch réseau manageable 48 ports PoE+, empilable, support SD-Access et DNA Center.",
-  },
-  {
-    id: "prod-3",
-    nom: "Firewall Fortinet FortiGate 200F",
-    reference: "FG-200F-BDL",
-    fournisseur: "Fortinet",
-    description:
-      "Pare-feu nouvelle génération, débit 27 Gbps, IPS, antivirus, filtrage web, SD-WAN intégré.",
-  },
-  {
-    id: "prod-4",
-    nom: "Baie de stockage NetApp AFF A250",
-    reference: "AFF-A250-SAS",
-    fournisseur: "NetApp",
-    description:
-      "Baie de stockage 100% flash, déduplication inline, réplication SnapMirror, 50 To bruts.",
-  },
-]
-
-const mockExigences: Exigence[] = [
-  {
-    id: "exig-1",
-    code: "EX-001",
-    titre: "Capacité de calcul haute performance",
-    description:
-      "Le serveur doit supporter au minimum 2 processeurs de dernière génération avec 256 Go de RAM extensible à 512 Go.",
-    categorie: "Infrastructure",
-    produitMatchId: "prod-1",
-    score: 92,
-    validee: true,
-  },
-  {
-    id: "exig-2",
-    code: "EX-002",
-    titre: "Réseau haut débit avec PoE",
-    description:
-      "Équipement réseau supportant au minimum 48 ports Gigabit Ethernet avec alimentation PoE+ sur tous les ports.",
-    categorie: "Réseau",
-    produitMatchId: "prod-2",
-    score: 85,
-    validee: true,
-  },
-  {
-    id: "exig-3",
-    code: "EX-003",
-    titre: "Protection périmétrique avancée",
-    description:
-      "Solution de sécurité réseau incluant IPS, antivirus, filtrage web et VPN SSL avec un débit minimum de 20 Gbps.",
-    categorie: "Sécurité",
-    produitMatchId: "prod-3",
-    score: 78,
-    validee: false,
-  },
-  {
-    id: "exig-4",
-    code: "EX-004",
-    titre: "Stockage redondant haute disponibilité",
-    description:
-      "Baie de stockage avec réplication synchrone, déduplication native et capacité nette de 30 To minimum.",
-    categorie: "Stockage",
-    produitMatchId: "prod-4",
-    score: 65,
-    validee: false,
-  },
-  {
-    id: "exig-5",
-    code: "EX-005",
-    titre: "Supervision centralisée SNMP",
-    description:
-      "Tous les équipements doivent être compatibles SNMP v3 et intégrables dans une plateforme de supervision centralisée.",
-    categorie: "Supervision",
-    produitMatchId: "prod-2",
-    score: 45,
-    validee: false,
-  },
-  {
-    id: "exig-6",
-    code: "EX-006",
-    titre: "Garantie et support 24/7",
-    description:
-      "Support technique 24h/24, 7j/7 avec remplacement matériel sous 4h sur site pour tous les équipements critiques.",
-    categorie: "Services",
-    produitMatchId: null,
-    score: 0,
-    validee: false,
-  },
-]
-
-const mockSuggestions: Suggestion[] = [
-  {
-    id: "sug-1",
-    texte:
-      "Aucun produit ne couvre l'exigence EX-006 (Garantie 24/7). Envisagez d'ajouter un contrat de maintenance Cisco SmartNet ou Dell ProSupport Plus.",
-    type: "manque",
-  },
-  {
-    id: "sug-2",
-    texte:
-      "Le score de matching sur l'exigence EX-005 (Supervision SNMP) est faible. Le switch Cisco C9300 supporte SNMP mais la couverture des autres équipements n'est pas assurée.",
-    type: "amelioration",
-  },
-  {
-    id: "sug-3",
-    texte:
-      "La protection périmétrique (EX-003) atteint 78% — vérifier la compatibilité VPN SSL avec le volume d'utilisateurs simultanés requis.",
-    type: "amelioration",
-  },
-]
+import type { Exigence, Suggestion } from "@/lib/mock-data"
 
 // ─── Coverage Gauge ─────────────────────────────────────────────────────────
 
@@ -243,19 +98,31 @@ function CoverageGauge({
 function ExigenceCard({
   exigence,
   isHighlighted,
+  produitNom,
   onHover,
+  onToggle,
+  onReject,
+  onReassign,
 }: {
   exigence: Exigence
   isHighlighted: boolean
+  produitNom: string | undefined
   onHover: (produitId: string | null) => void
+  onToggle: () => void
+  onReject: () => void
+  onReassign: () => void
 }) {
+  const isValidated = exigence.validationStatus === "accepted" || exigence.validationStatus === "edited"
+
   return (
     <div
       className={cn(
         "rounded-lg border p-3 transition-all",
         isHighlighted
           ? "border-primary bg-primary/5 ring-1 ring-primary/20"
-          : "hover:border-primary/40"
+          : "hover:border-primary/40",
+        isValidated && "border-emerald-400 bg-emerald-50/50 dark:bg-emerald-950/20",
+        exigence.validationStatus === "rejected" && "border-red-400 bg-red-50/50 dark:bg-red-950/20 opacity-60"
       )}
       onMouseEnter={() => onHover(exigence.produitMatchId)}
       onMouseLeave={() => onHover(null)}
@@ -263,7 +130,8 @@ function ExigenceCard({
       <div className="flex items-start justify-between gap-2">
         <div className="flex items-start gap-2">
           <Checkbox
-            checked={exigence.validee}
+            checked={isValidated}
+            onCheckedChange={onToggle}
             className="mt-0.5"
             aria-label={`Valider l'exigence ${exigence.code}`}
           />
@@ -280,11 +148,11 @@ function ExigenceCard({
               {exigence.titre}
             </p>
             <p className="text-muted-foreground text-xs leading-relaxed">
-              {exigence.description}
+              {exigence.editedDescription ?? exigence.description}
             </p>
           </div>
         </div>
-        <div className="shrink-0">
+        <div className="flex shrink-0 flex-col items-end gap-1">
           {exigence.produitMatchId ? (
             <ScoreBadge score={exigence.score} />
           ) : (
@@ -295,14 +163,34 @@ function ExigenceCard({
               Non couvert
             </Badge>
           )}
+          {exigence.produitMatchId && (
+            <div className="flex gap-1">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-6"
+                title="Reassigner"
+                onClick={(e) => { e.stopPropagation(); onReassign() }}
+              >
+                <RefreshCw className="size-3" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-6 text-red-500 hover:text-red-600"
+                title="Rejeter le match"
+                onClick={(e) => { e.stopPropagation(); onReject() }}
+              >
+                <X className="size-3" />
+              </Button>
+            </div>
+          )}
         </div>
       </div>
-      {exigence.produitMatchId && (
+      {produitNom && (
         <div className="mt-2 flex items-center gap-1 pl-6">
           <ArrowRight className="text-muted-foreground size-3" />
-          <span className="text-muted-foreground text-xs">
-            {mockProduits.find((p) => p.id === exigence.produitMatchId)?.nom}
-          </span>
+          <span className="text-muted-foreground text-xs">{produitNom}</span>
         </div>
       )}
     </div>
@@ -317,7 +205,7 @@ function ProduitCard({
   isHighlighted,
   onHover,
 }: {
-  produit: Produit
+  produit: { id: string; nom: string; reference: string; fournisseur: string; description: string }
   matchedExigences: Exigence[]
   isHighlighted: boolean
   onHover: (produitId: string | null) => void
@@ -361,7 +249,6 @@ function ProduitCard({
         </div>
         <ScoreBadge score={avgScore} className="shrink-0" />
       </div>
-      {/* Exigences couvertes */}
       <div className="mt-3 space-y-1.5 pl-6">
         <p className="text-muted-foreground text-xs font-medium">
           Exigences couvertes ({matchedExigences.length})
@@ -386,15 +273,19 @@ function ProduitCard({
 
 function SuggestionPanel({
   suggestions,
+  onGenerate,
+  isGenerating,
 }: {
   suggestions: Suggestion[]
+  onGenerate: () => void
+  isGenerating: boolean
 }) {
   return (
     <Card className="border-dashed">
       <CardHeader className="pb-3">
         <CardTitle className="flex items-center gap-2 text-sm">
           <Sparkles className="size-4 text-amber-500" />
-          Suggestions IA — Lacunes détectées
+          Suggestions IA — Lacunes detectees
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-2">
@@ -414,10 +305,14 @@ function SuggestionPanel({
             <p className="text-xs leading-relaxed">{sug.texte}</p>
           </div>
         ))}
-        <Button variant="outline" size="sm" className="mt-2 w-full">
-          <Sparkles className="mr-2 size-3" />
-          Générer des recommandations détaillées
-        </Button>
+        {isGenerating ? (
+          <AiIndicator label="Generation des recommandations..." className="mt-2 w-full justify-center" />
+        ) : (
+          <Button variant="outline" size="sm" className="mt-2 w-full" onClick={onGenerate}>
+            <Sparkles className="mr-2 size-3" />
+            Generer des recommandations detaillees
+          </Button>
+        )}
       </CardContent>
     </Card>
   )
@@ -426,16 +321,29 @@ function SuggestionPanel({
 // ─── Main Component ─────────────────────────────────────────────────────────
 
 export function MatchingUnified() {
-  const [highlightedProduit, setHighlightedProduit] = useState<string | null>(
-    null
-  )
+  const {
+    exigences,
+    produits,
+    suggestions,
+    validateMatch,
+    rejectMatch,
+    reassignMatch,
+    validateAllMatches,
+    setSuggestions,
+  } = useConsultation()
 
-  const coveredCount = mockExigences.filter((e) => e.produitMatchId).length
+  const [highlightedProduit, setHighlightedProduit] = useState<string | null>(null)
+  const [isGenerating, setIsGenerating] = useState(false)
+  const [reassignTarget, setReassignTarget] = useState<Exigence | null>(null)
 
-  // Build product -> exigences map
+  const coveredCount = exigences.filter((e) => e.produitMatchId).length
+  const validatedCount = exigences.filter(
+    (e) => e.validationStatus === "accepted" || e.validationStatus === "edited"
+  ).length
+
   const produitExigencesMap = useMemo(() => {
     const map = new Map<string, Exigence[]>()
-    for (const ex of mockExigences) {
+    for (const ex of exigences) {
       if (ex.produitMatchId) {
         const existing = map.get(ex.produitMatchId) ?? []
         existing.push(ex)
@@ -443,12 +351,51 @@ export function MatchingUnified() {
       }
     }
     return map
-  }, [])
+  }, [exigences])
+
+  const handleToggle = (exigenceId: string) => {
+    validateMatch(exigenceId)
+    toast.success(toasts.matchValidated)
+  }
+
+  const handleReject = (exigenceId: string) => {
+    rejectMatch(exigenceId)
+    toast.success(toasts.matchRejected)
+  }
+
+  const handleReassign = (exigenceId: string, produitId: string) => {
+    reassignMatch(exigenceId, produitId)
+    toast.success(toasts.matchReassigned)
+  }
+
+  const handleValidateAll = () => {
+    validateAllMatches()
+    toast.success(toasts.allMatchesValidated)
+  }
+
+  const handleGenerateRecommendations = async () => {
+    setIsGenerating(true)
+    const recs = await simulateRecommendations()
+    setSuggestions(recs.map((r) => ({ ...r, id: r.id })))
+    setIsGenerating(false)
+    toast.success(toasts.recommendationsGenerated)
+  }
 
   return (
     <div className="flex h-full flex-col gap-4">
-      {/* Coverage Gauge */}
-      <CoverageGauge covered={coveredCount} total={mockExigences.length} />
+      {/* Header batch */}
+      <div className="flex items-center justify-between">
+        <CoverageGauge covered={coveredCount} total={exigences.length} />
+        <div className="flex items-center gap-3">
+          <span className="text-sm text-muted-foreground">
+            {validatedCount}/{exigences.length} valides
+          </span>
+          <Button size="sm" onClick={handleValidateAll}>
+            <CheckCheck className="mr-2 size-4" />
+            Tout valider
+          </Button>
+        </div>
+      </div>
 
       {/* Resizable 2-column layout */}
       <ResizablePanelGroup
@@ -462,12 +409,12 @@ export function MatchingUnified() {
               <FileText className="text-muted-foreground size-4" />
               <h3 className="text-sm font-semibold">Exigences DCE</h3>
               <Badge variant="secondary" className="ml-auto">
-                {mockExigences.length}
+                {exigences.length}
               </Badge>
             </div>
             <ScrollArea className="flex-1">
               <div className="space-y-2 p-3">
-                {mockExigences.map((exigence) => (
+                {exigences.map((exigence) => (
                   <ExigenceCard
                     key={exigence.id}
                     exigence={exigence}
@@ -475,7 +422,15 @@ export function MatchingUnified() {
                       highlightedProduit !== null &&
                       exigence.produitMatchId === highlightedProduit
                     }
+                    produitNom={
+                      exigence.produitMatchId
+                        ? produits.find((p) => p.id === exigence.produitMatchId)?.nom
+                        : undefined
+                    }
                     onHover={setHighlightedProduit}
+                    onToggle={() => handleToggle(exigence.id)}
+                    onReject={() => handleReject(exigence.id)}
+                    onReassign={() => setReassignTarget(exigence)}
                   />
                 ))}
               </div>
@@ -485,27 +440,23 @@ export function MatchingUnified() {
 
         <ResizableHandle withHandle />
 
-        {/* Right: Produits / Références */}
+        {/* Right: Produits */}
         <ResizablePanel defaultSize={50} minSize={30}>
           <div className="flex h-full flex-col">
             <div className="flex items-center gap-2 border-b px-4 py-3">
               <Package className="text-muted-foreground size-4" />
-              <h3 className="text-sm font-semibold">
-                Produits / Références
-              </h3>
+              <h3 className="text-sm font-semibold">Produits / References</h3>
               <Badge variant="secondary" className="ml-auto">
-                {mockProduits.length}
+                {produits.length}
               </Badge>
             </div>
             <ScrollArea className="flex-1">
               <div className="space-y-2 p-3">
-                {mockProduits.map((produit) => (
+                {produits.map((produit) => (
                   <ProduitCard
                     key={produit.id}
                     produit={produit}
-                    matchedExigences={
-                      produitExigencesMap.get(produit.id) ?? []
-                    }
+                    matchedExigences={produitExigencesMap.get(produit.id) ?? []}
                     isHighlighted={highlightedProduit === produit.id}
                     onHover={setHighlightedProduit}
                   />
@@ -517,7 +468,26 @@ export function MatchingUnified() {
       </ResizablePanelGroup>
 
       {/* Suggestion Panel */}
-      <SuggestionPanel suggestions={mockSuggestions} />
+      <SuggestionPanel
+        suggestions={suggestions}
+        onGenerate={handleGenerateRecommendations}
+        isGenerating={isGenerating}
+      />
+
+      {/* Reassign Dialog */}
+      <ReassignDialog
+        open={!!reassignTarget}
+        onOpenChange={(open) => !open && setReassignTarget(null)}
+        exigenceCode={reassignTarget?.code ?? ""}
+        produits={produits}
+        currentProduitId={reassignTarget?.produitMatchId ?? null}
+        onConfirm={(produitId) => {
+          if (reassignTarget) {
+            handleReassign(reassignTarget.id, produitId)
+            setReassignTarget(null)
+          }
+        }}
+      />
     </div>
   )
 }

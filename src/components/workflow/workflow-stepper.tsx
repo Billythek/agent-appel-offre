@@ -9,6 +9,7 @@ import {
   FileText,
   CheckCircle2,
   Shield,
+  Lock,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
@@ -57,15 +58,24 @@ const steps: Step[] = [
   },
 ]
 
-type StepStatus = "completed" | "active" | "upcoming"
+type StepStatus = "completed" | "active" | "upcoming" | "locked"
 
 function getStepStatus(
   stepId: string,
-  currentStep: string
+  currentStep: string,
+  hitl1Validated: boolean
 ): StepStatus {
   const stepIds = steps.map((s) => s.id)
   const currentIndex = stepIds.indexOf(currentStep)
   const stepIndex = stepIds.indexOf(stepId)
+
+  // L'onglet Documents est verrouille si HITL1 pas valide
+  if (stepId === "documents" && !hitl1Validated && currentStep !== "documents" && currentStep !== "validation") {
+    return "locked"
+  }
+  if (stepId === "validation" && !hitl1Validated) {
+    return "locked"
+  }
 
   if (stepIndex < currentIndex) return "completed"
   if (stepIndex === currentIndex) return "active"
@@ -74,14 +84,15 @@ function getStepStatus(
 
 interface WorkflowStepperProps {
   currentStep: string
+  hitl1Validated?: boolean
 }
 
-export function WorkflowStepper({ currentStep }: WorkflowStepperProps) {
+export function WorkflowStepper({ currentStep, hitl1Validated = false }: WorkflowStepperProps) {
   return (
     <div className="w-full overflow-x-auto">
       <div className="flex min-w-[640px] items-center justify-between px-4 py-6">
         {steps.map((step, index) => {
-          const status = getStepStatus(step.id, currentStep)
+          const status = getStepStatus(step.id, currentStep, hitl1Validated)
           const Icon = step.icon
 
           return (
@@ -99,7 +110,7 @@ export function WorkflowStepper({ currentStep }: WorkflowStepperProps) {
                       status === "completed"
                         ? "bg-primary/10 text-primary"
                         : status === "active"
-                          ? "bg-primary/15 text-primary"
+                          ? "bg-primary/15 text-primary animate-pulse"
                           : "bg-muted text-muted-foreground"
                     )}
                   >
@@ -120,7 +131,9 @@ export function WorkflowStepper({ currentStep }: WorkflowStepperProps) {
                     status === "active" &&
                       "border-primary bg-background text-primary ring-4 ring-primary/20",
                     status === "upcoming" &&
-                      "border-muted bg-muted text-muted-foreground"
+                      "border-muted bg-muted text-muted-foreground",
+                    status === "locked" &&
+                      "border-muted bg-muted/50 text-muted-foreground/50"
                   )}
                 >
                   {status === "completed" ? (
@@ -131,6 +144,8 @@ export function WorkflowStepper({ currentStep }: WorkflowStepperProps) {
                     >
                       <CheckCircle2 className="size-5" />
                     </motion.div>
+                  ) : status === "locked" ? (
+                    <Lock className="size-4" />
                   ) : (
                     <Icon className="size-5" />
                   )}
@@ -159,7 +174,8 @@ export function WorkflowStepper({ currentStep }: WorkflowStepperProps) {
                     "text-center text-xs font-medium whitespace-nowrap",
                     status === "completed" && "text-primary",
                     status === "active" && "text-primary font-semibold",
-                    status === "upcoming" && "text-muted-foreground"
+                    status === "upcoming" && "text-muted-foreground",
+                    status === "locked" && "text-muted-foreground/50"
                   )}
                 >
                   {step.label}
@@ -170,9 +186,7 @@ export function WorkflowStepper({ currentStep }: WorkflowStepperProps) {
               {index < steps.length - 1 && (
                 <div className="relative mx-2 h-0.5 flex-1">
                   <div className="bg-muted absolute inset-0 rounded-full" />
-                  {(status === "completed" ||
-                    (status === "active" &&
-                      getStepStatus(steps[index + 1].id, currentStep) !== "upcoming")) && (
+                  {status === "completed" && (
                     <motion.div
                       className="bg-primary absolute inset-0 rounded-full"
                       initial={{ scaleX: 0 }}

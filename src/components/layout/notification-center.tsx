@@ -1,7 +1,8 @@
 "use client"
 
 import * as React from "react"
-import { Bell, Bot, Clock, CheckCircle2 } from "lucide-react"
+import { useState } from "react"
+import { Bell, Bot, Clock, CheckCircle2, CheckCheck } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import {
@@ -14,6 +15,8 @@ import {
 } from "@/components/ui/sheet"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
+import { toast } from "sonner"
+import { toasts } from "@/lib/toast-messages"
 
 interface Notification {
   id: string
@@ -22,40 +25,45 @@ interface Notification {
   description: string
   time: string
   read: boolean
+  link?: string
 }
 
-const notifications: Notification[] = [
+const initialNotifications: Notification[] = [
   {
     id: "1",
     type: "ia_complete",
-    title: "Analyse terminée",
-    description: "DCE-2025-001 — Parsing et extraction des exigences complétés",
+    title: "Analyse terminee",
+    description: "DCE-2025-001 — Parsing et extraction des exigences completes",
     time: "Il y a 5 min",
     read: false,
+    link: "/consultations/dce-2025-001",
   },
   {
     id: "2",
     type: "deadline",
-    title: "Échéance critique",
+    title: "Echeance critique",
     description: "DCE-2025-003 — Date limite dans 48h",
     time: "Il y a 1h",
     read: false,
+    link: "/consultations/dce-2025-003",
   },
   {
     id: "3",
     type: "validation",
     title: "Validation requise",
-    description: "DCE-2025-002 — Matching prêt pour validation HITL 1",
+    description: "DCE-2025-002 — Matching pret pour validation HITL 1",
     time: "Il y a 2h",
     read: true,
+    link: "/consultations/dce-2025-002/matching",
   },
   {
     id: "4",
     type: "ia_complete",
-    title: "Documents générés",
-    description: "DCE-2025-001 — DC1, DC2 et mémoire technique prêts",
+    title: "Documents generes",
+    description: "DCE-2025-001 — DC1, DC2 et memoire technique prets",
     time: "Il y a 3h",
     read: true,
+    link: "/consultations/dce-2025-001/documents",
   },
 ]
 
@@ -66,7 +74,20 @@ const iconMap = {
 }
 
 export function NotificationCenter() {
+  const [notifications, setNotifications] = useState<Notification[]>(initialNotifications)
+
   const unread = notifications.filter((n) => !n.read).length
+
+  const markAsRead = (id: string) => {
+    setNotifications((prev) =>
+      prev.map((n) => (n.id === id ? { ...n, read: true } : n))
+    )
+  }
+
+  const markAllAsRead = () => {
+    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })))
+    toast.success(toasts.allNotificationsRead)
+  }
 
   return (
     <Sheet>
@@ -86,11 +107,24 @@ export function NotificationCenter() {
       </SheetTrigger>
       <SheetContent>
         <SheetHeader>
-          <SheetTitle>Notifications</SheetTitle>
+          <div className="flex items-center justify-between">
+            <SheetTitle>Notifications</SheetTitle>
+            {unread > 0 && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-xs"
+                onClick={markAllAsRead}
+              >
+                <CheckCheck className="mr-1 size-3" />
+                Tout marquer comme lu
+              </Button>
+            )}
+          </div>
           <SheetDescription>
             {unread > 0
               ? `${unread} notification${unread > 1 ? "s" : ""} non lue${unread > 1 ? "s" : ""}`
-              : "Tout est à jour"}
+              : "Tout est a jour"}
           </SheetDescription>
         </SheetHeader>
         <ScrollArea className="h-[calc(100vh-8rem)]">
@@ -100,9 +134,10 @@ export function NotificationCenter() {
               return (
                 <React.Fragment key={notification.id}>
                   <div
-                    className={`flex gap-3 rounded-lg p-3 transition-colors hover:bg-accent ${
+                    className={`flex gap-3 rounded-lg p-3 transition-colors hover:bg-accent cursor-pointer ${
                       !notification.read ? "bg-accent/50" : ""
                     }`}
+                    onClick={() => markAsRead(notification.id)}
                   >
                     <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full bg-muted">
                       <Icon className="size-4 text-muted-foreground" />
@@ -117,9 +152,20 @@ export function NotificationCenter() {
                       <p className="text-sm text-muted-foreground">
                         {notification.description}
                       </p>
-                      <p className="text-xs text-muted-foreground">
-                        {notification.time}
-                      </p>
+                      <div className="flex items-center gap-2">
+                        <p className="text-xs text-muted-foreground">
+                          {notification.time}
+                        </p>
+                        {notification.link && (
+                          <a
+                            href={notification.link}
+                            className="text-xs text-primary hover:underline"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            Voir
+                          </a>
+                        )}
+                      </div>
                     </div>
                   </div>
                   {index < notifications.length - 1 && <Separator />}

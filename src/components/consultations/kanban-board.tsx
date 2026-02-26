@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useCallback } from "react"
+import { useState, useCallback, useEffect } from "react"
 import {
   DndContext,
   DragOverlay,
@@ -213,7 +213,6 @@ function KanbanColumn({
         isOver && "ring-2 ring-primary/30"
       )}
     >
-      {/* En-tete de colonne */}
       <div className="flex items-center gap-2 border-b px-3 py-2.5">
         <div className={cn("size-2 rounded-full", config.dotColor)} />
         <h3 className="text-sm font-semibold text-foreground">{config.title}</h3>
@@ -222,7 +221,6 @@ function KanbanColumn({
         </Badge>
       </div>
 
-      {/* Zone de depot avec cartes */}
       <div ref={setNodeRef} className="flex-1 overflow-y-auto p-2">
         <SortableContext
           items={cards.map((c) => c.id)}
@@ -248,9 +246,29 @@ function KanbanColumn({
 // Composant principal : Kanban Board
 // -------------------------------------------------------------------
 
-export function KanbanBoard() {
+interface KanbanBoardProps {
+  newCards?: KanbanCardData[]
+}
+
+export function KanbanBoard({ newCards }: KanbanBoardProps) {
   const [columnCards, setColumnCards] = useState<Record<string, KanbanCardData[]>>(initialCards)
   const [activeCard, setActiveCard] = useState<KanbanCardData | null>(null)
+
+  // Ajouter les nouvelles cartes dans la colonne "analyse"
+  useEffect(() => {
+    if (!newCards || newCards.length === 0) return
+    setColumnCards((prev) => {
+      const existingIds = new Set(
+        Object.values(prev).flatMap((cards) => cards.map((c) => c.id))
+      )
+      const cardsToAdd = newCards.filter((c) => !existingIds.has(c.id))
+      if (cardsToAdd.length === 0) return prev
+      return {
+        ...prev,
+        analyse: [...cardsToAdd, ...(prev.analyse ?? [])],
+      }
+    })
+  }, [newCards])
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -258,7 +276,6 @@ export function KanbanBoard() {
     })
   )
 
-  // Trouver la colonne d'une carte
   const findColumn = useCallback(
     (cardId: string): string | null => {
       for (const [colId, cards] of Object.entries(columnCards)) {
@@ -269,7 +286,6 @@ export function KanbanBoard() {
     [columnCards]
   )
 
-  // Debut du drag
   const handleDragStart = useCallback(
     (event: DragStartEvent) => {
       const { active } = event
@@ -281,7 +297,6 @@ export function KanbanBoard() {
     [columnCards, findColumn]
   )
 
-  // Survol pendant le drag (deplacement entre colonnes)
   const handleDragOver = useCallback(
     (event: DragOverEvent) => {
       const { active, over } = event
@@ -291,8 +306,7 @@ export function KanbanBoard() {
       const overId = over.id as string
 
       const activeCol = findColumn(activeId)
-      // overId peut etre un id de colonne ou un id de carte
-      let overCol = columns.find((c) => c.id === overId)
+      const overCol = columns.find((c) => c.id === overId)
         ? overId
         : findColumn(overId)
 
@@ -307,7 +321,6 @@ export function KanbanBoard() {
         const [movedCard] = activeCards.splice(activeIndex, 1)
         const updatedCard = { ...movedCard, status: overCol }
 
-        // Trouver l'index de drop dans la colonne cible
         const overIndex = overCards.findIndex((c) => c.id === overId)
         if (overIndex >= 0) {
           overCards.splice(overIndex, 0, updatedCard)
@@ -325,7 +338,6 @@ export function KanbanBoard() {
     [findColumn]
   )
 
-  // Fin du drag
   const handleDragEnd = useCallback(
     (event: DragEndEvent) => {
       const { active, over } = event
@@ -339,7 +351,6 @@ export function KanbanBoard() {
       const activeCol = findColumn(activeId)
       if (!activeCol) return
 
-      // Reordonnancement dans la meme colonne
       const overCol = findColumn(overId)
       if (activeCol === overCol && activeCol) {
         setColumnCards((prev) => {
@@ -378,7 +389,6 @@ export function KanbanBoard() {
         <ScrollBar orientation="horizontal" />
       </ScrollArea>
 
-      {/* Overlay affiche pendant le drag */}
       <DragOverlay>
         {activeCard ? (
           <div className="w-[264px] rotate-3">

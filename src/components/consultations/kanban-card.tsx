@@ -1,5 +1,6 @@
 "use client"
 
+import { useRouter } from "next/navigation"
 import { Clock, Building2, GripVertical } from "lucide-react"
 import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -59,9 +60,18 @@ function getCountdownColor(days: number): string {
 }
 
 export function KanbanCard({ card, isDragging, dragHandleProps }: KanbanCardProps) {
+  const router = useRouter()
   const daysRemaining = getDaysRemaining(card.deadline)
   const statusInfo = statusConfig[card.status] ?? statusConfig.nouveau
   const isAnalyse = card.status === "analyse"
+
+  const handleClick = (e: React.MouseEvent) => {
+    // Ne pas naviguer si on drag
+    if (isDragging) return
+    // Construire le slug a partir de la reference (ex: DCE-2025-001 -> dce-2025-001)
+    const slug = card.reference.toLowerCase()
+    router.push(`/consultations/${slug}`)
+  }
 
   return (
     <Card
@@ -69,6 +79,7 @@ export function KanbanCard({ card, isDragging, dragHandleProps }: KanbanCardProp
         "gap-0 p-3 transition-shadow hover:shadow-md cursor-grab",
         isDragging && "opacity-50 shadow-lg rotate-2"
       )}
+      onClick={handleClick}
     >
       {/* En-tete: reference + poignee */}
       <div className="flex items-center justify-between mb-1.5">
